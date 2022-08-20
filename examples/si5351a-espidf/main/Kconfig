@@ -1,0 +1,41 @@
+menu "Si5351"
+
+    config I2C_PORT_NUM
+        int "I2C Port"
+		range 0 1
+		default 1
+					
+    config GPIO_SCL
+        int "GPIO for I2C SCL."
+		range 0 39
+		default 22
+			
+    config GPIO_SDA
+        int "GPIO for I2C SDA."
+		range 0 39
+		default 21
+			
+    choice
+		prompt "I2C bus frequency"
+		
+		config I2C_FREQ_HZ_10K
+			bool "10kHz"
+		config I2C_FREQ_HZ_100K
+			bool "100kHz"
+		config I2C_FREQ_HZ_400K
+			bool "400kHz"
+	endchoice 						
+
+	config I2C_FREQ_HZ
+		int
+		default 100000
+		default 10000 if I2C_FREQ_HZ_10K
+		default 100000 if I2C_FREQ_HZ_100K
+		default 400000 if I2C_FREQ_HZ_400K
+
+	
+endmenu
+
+
+
+

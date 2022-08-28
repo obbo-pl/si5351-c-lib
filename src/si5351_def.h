@@ -42,8 +42,6 @@ enum si5351_variant {
 #define SI5351_PLL_INT_MIN                          (15)
 #define SI5351_PLL_INT_MAX                          (90)
 #define SI5351_R_DIVIDER_MAX                        (128)
-#define SI5351_MULTISYNTH_FREQUENCY_FRAC_MAX        (112500000UL)
-#define SI5351_MULTISYNTH_FREQUENCY_INTEGER_MAX     (150000000UL)
 
 #define SI5351_REVA_MULTISYNTH_FREQUENCY_MIN        (8000UL)
 #define SI5351_REVA_MULTISYNTH_FREQUENCY_MAX        (160000000UL)
@@ -56,11 +54,10 @@ enum si5351_variant {
 #define SI5351_MULTISYNTH_P3_bm                     (0xFFFFF)
 
 #define SI5351_MULTISYNTH_INT_0_TO_5_DIV4           (4)
-#define SI5351_MULTISYNTH_INT_0_TO_5_DIV6           (6)
 #define SI5351_MULTISYNTH_FRAC_0_TO_5_MIN           (8)
 #define SI5351_MULTISYNTH_FRAC_0_TO_5_MAX           (2048)
-#define SI5351_MULTISYNTH_INT_6_TO_7_MIN            (6)
-#define SI5351_MULTISYNTH_INT_6_TO_7_MAX            (254)
+#define SI5351_MULTISYNTH_INT_0_TO_7_MIN            (6)
+#define SI5351_MULTISYNTH_INT_0_TO_7_MAX            (254)
 
 
 #define SI5351_DEVICE_STATUS                        0
@@ -189,4 +186,4 @@ enum {
     SI5351_FANOUT_ENABLE_CLKIN_bm                   = 0x80,
 };
 
-#endif /* MAIN_SI5351_DEF_H_ */
+#endif /* _SI5351_DEF_H_ */

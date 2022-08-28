@@ -69,8 +69,8 @@ typedef enum {
 
 typedef enum {
     SI5351_CRYSTAL_NONE         = 0,
-    SI5351_CRYSTAL_FREQ_25MHZ   = 25000000,
-    SI5351_CRYSTAL_FREQ_27MHZ   = 27000000
+    SI5351_CRYSTAL_FREQ_25MHZ   = 25,
+    SI5351_CRYSTAL_FREQ_27MHZ   = 27
 } si5351_crystal_freq_t;
 
 typedef enum {
@@ -102,12 +102,12 @@ typedef enum {
 typedef struct {
     bool configured;
     si5351_pll_source_t source;
-    uint32_t vco_freq;
+    uint32_t frequency;
 } si5351_pll_t;
 
 typedef struct {
     bool configured;
-    uint32_t ms_freq;
+    uint32_t frequency;
 } si5351_ms_t;
 
 typedef enum si5351_variant si5351_variant_t;
@@ -117,7 +117,7 @@ typedef struct {
     si5351_variant_t variant;
     si5351_revision_t rev_id;
     uint8_t i2c_address;
-    si5351_crystal_freq_t crystal_freq;
+    uint32_t crystal_freq;
     si5351_crystal_load_t crystal_load;
     uint32_t clkin_freq;
     uint8_t clkin_divider;
@@ -201,10 +201,12 @@ si5351_err_t si5351_set_pll_source(si5351_pll_source_t plla, si5351_pll_source_t
 si5351_err_t si5351_set_pll_vco(si5351_pll_reg_t pll, uint32_t frequency);
 si5351_err_t si5351_set_pll_vco_integer(si5351_pll_reg_t pll, uint8_t a);
 si5351_err_t si5351_set_pll_vco_fractional(si5351_pll_reg_t pll, uint8_t a, uint32_t b, uint32_t c);
+si5351_err_t si5351_get_pll_frequency(si5351_pll_reg_t pll, uint32_t* frequency);
 si5351_err_t si5351_set_multisynth(si5351_ms_clk_reg_t ms, si5351_pll_reg_t pll_source, uint32_t frequency);
 si5351_err_t si5351_set_multisynth_integer(si5351_ms_clk_reg_t ms, si5351_pll_reg_t pll_source, uint16_t a);
 si5351_err_t si5351_set_multisynth_fractional(si5351_ms_clk_reg_t ms, si5351_pll_reg_t pll_source, uint16_t a, uint32_t b, uint32_t c);
 si5351_err_t si5351_set_multisynth_mode_integer(si5351_ms_clk_reg_t ms, bool integer);
+si5351_err_t si5351_get_multisynth_frequency(si5351_ms_clk_reg_t ms, uint32_t* frequency);
 si5351_err_t si5351_set_fanout(bool clkin, bool xtal, bool ms);
 si5351_err_t si5351_set_clk(si5351_ms_clk_reg_t clk,
                             bool powerup,
@@ -216,7 +218,6 @@ si5351_err_t si5351_set_clk_power_enable(si5351_ms_clk_reg_t clk, bool enable);
 si5351_err_t si5351_reset_pll();
 si5351_err_t si5351_set_output_enable(si5351_ms_clk_reg_t clk, bool enable);
 si5351_err_t si5351_set_powerdown();
-
 
 
 #ifdef __cplusplus

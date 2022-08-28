@@ -17,13 +17,13 @@
 #include "driver/i2c.h"
 
 
-#define I2C_PORT_NUM				I2C_NUM_1  		// CONFIG_I2C_PORT_NUM
-#define I2C_SCL_IO					GPIO_NUM_22		// CONFIG_GPIO_SCL
-#define I2C_SDA_IO					GPIO_NUM_21		// CONFIG_GPIO_SDA
-#define I2C_FREQ_HZ					100000			// CONFIG_I2C_FREQ_HZ
+#define I2C_PORT_NUM                I2C_NUM_1       // CONFIG_I2C_PORT_NUM
+#define I2C_SCL_IO                  GPIO_NUM_22     // CONFIG_GPIO_SCL
+#define I2C_SDA_IO                  GPIO_NUM_21     // CONFIG_GPIO_SDA
+#define I2C_FREQ_HZ                 100000          // CONFIG_I2C_FREQ_HZ
 
-#define I2C_TX_BUF_DISABLE  		0
-#define I2C_RX_BUF_DISABLE  		0
+#define I2C_TX_BUF_DISABLE          0
+#define I2C_RX_BUF_DISABLE          0
 
 #define WRITE_BIT                   I2C_MASTER_WRITE
 #define READ_BIT                    I2C_MASTER_READ

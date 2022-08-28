@@ -13,7 +13,6 @@
 #include <math.h>
 
 
-
 // function prototype
 si5351_err_t si5351_set_default();
 si5351_err_t si5351_get_ram();
@@ -40,10 +39,10 @@ const uint8_t si5351_multisynth_register[SI5351_MS_CLK_COUNT] = {
     SI5351_MULTISYNTH6_PARAMETERS, SI5351_MULTISYNTH7_PARAMETERS
 };
 
-#define SI5351_GOTO_ON_ERROR(x,jump) do {        \
-        result = x;                                \
+#define SI5351_GOTO_ON_ERROR(x,jump) do {       \
+        result = x;                             \
         if (result != ESP_OK) {                 \
-            goto jump;                            \
+            goto jump;                          \
         }                                       \
     } while(0)
 
@@ -163,8 +162,8 @@ si5351_err_t si5351_get_status(uint8_t* status)
 si5351_err_t si5351_set_crystal_frequency(si5351_crystal_freq_t frequency)
 {
     si5351_err_t result = SI5351_ERR_INVALID_ARG;
-    if ((frequency == SI5351_CRYSTAL_FREQ_25MHZ) || (frequency == SI5351_CRYSTAL_FREQ_27MHZ)) {
-        chip.crystal_freq = frequency;
+    if ((frequency == SI5351_CRYSTAL_FREQ_25MHZ) || (frequency == SI5351_CRYSTAL_FREQ_27MHZ) || (frequency == SI5351_CRYSTAL_NONE)) {
+        chip.crystal_freq = frequency * 1000000;
         result = SI5351_OK;
     }
     return result;
@@ -248,7 +247,7 @@ si5351_err_t si5351_set_pll_vco_fractional(si5351_pll_reg_t pll, uint8_t a, uint
         result = SI5351_ERR_INVALID_ARG;
         goto finish;
     }
-    uint32_t frequency = (uint32_t)((uint64_t)chip.crystal_freq * b) / c + chip.crystal_freq * a;
+    uint32_t frequency = (uint32_t)(((uint64_t)chip.crystal_freq * b) / c + chip.crystal_freq * a);
 #if (SI5351_ALLOW_OVERCLOCKING == 0)
     if ((frequency < SI5351_PLL_VCO_MIN) || (frequency > SI5351_PLL_VCO_MAX)) {
         result = SI5351_ERR_INVALID_ARG;
@@ -293,10 +292,26 @@ si5351_err_t si5351_set_pll_vco_fractional(si5351_pll_reg_t pll, uint8_t a, uint
     data[7] = (uint8_t)(p2 & 0xFF);
     result = si5351_i2c_write(chip.i2c_address, pll_reg, data, SI5351_MULTISYNTH_NX_PARAMETERS_LENGTH);
     if (result == SI5351_OK) {
-        chip.pll[pll].vco_freq = frequency;
+        chip.pll[pll].frequency = frequency;
         chip.pll[pll].configured = true;
     }
 finish:
+    return result;
+}
+
+si5351_err_t si5351_get_pll_frequency(si5351_pll_reg_t pll, uint32_t* frequency)
+{
+    si5351_err_t result = SI5351_OK;
+    if ((pll >= 0) && (pll < SI5351_PLL_COUNT)) {
+        if (!chip.pll[pll].configured) {
+            result = SI5351_ERR_NOT_INITIALISED;
+            *frequency = 0;
+        } else {
+            *frequency = chip.pll[pll].frequency;
+        }
+    } else {
+        result = SI5351_ERR_INVALID_ARG;
+    }
     return result;
 }
 
@@ -307,7 +322,7 @@ si5351_err_t si5351_set_multisynth(si5351_ms_clk_reg_t ms, si5351_pll_reg_t pll_
         result = SI5351_ERR_NOT_INITIALISED;
         goto finish;
     }
-    uint32_t vco_freq = chip.pll[pll_source].vco_freq;
+    uint32_t vco_freq = chip.pll[pll_source].frequency;
     uint16_t a = (uint16_t)(vco_freq / frequency);
     switch (ms) {
         case SI5351_MS_CLK0:
@@ -320,13 +335,9 @@ si5351_err_t si5351_set_multisynth(si5351_ms_clk_reg_t ms, si5351_pll_reg_t pll_
             if ((chip.rev_id == SI5351_REVISION_A) && (frequency > SI5351_REVA_MULTISYNTH_FREQUENCY_MAX)) result = SI5351_ERR_INVALID_ARG;
             if ((chip.rev_id == SI5351_REVISION_B) && (frequency > SI5351_REVB_MULTISYNTH_FREQUENCY_MAX)) result = SI5351_ERR_INVALID_ARG;
 #endif
-            if (a < SI5351_MULTISYNTH_FRAC_0_TO_5_MIN) {
-                if ((vco_freq < SI5351_MULTISYNTH_INT_0_TO_5_DIV4 * (frequency + 1))
-                    && (vco_freq > SI5351_MULTISYNTH_INT_0_TO_5_DIV4 * (frequency - 1))) {
-                    result = si5351_set_multisynth_integer(ms, pll_source, SI5351_MULTISYNTH_INT_0_TO_5_DIV4);
-                } else if (((vco_freq < SI5351_MULTISYNTH_INT_0_TO_5_DIV6 * (frequency + 1))
-                    && (vco_freq > SI5351_MULTISYNTH_INT_0_TO_5_DIV6 * (frequency - 1)))) {
-                    result = si5351_set_multisynth_integer(ms, pll_source, SI5351_MULTISYNTH_INT_0_TO_5_DIV6);
+            if ((a < SI5351_MULTISYNTH_FRAC_0_TO_5_MIN) && (a >= SI5351_MULTISYNTH_INT_0_TO_5_DIV4) && si5351_is_even_integer(a)) {
+                if ((vco_freq < a * (frequency + 1)) && (vco_freq > a * (frequency - 1))) {
+                    result = si5351_set_multisynth_integer(ms, pll_source, a);
                 } else {
                     result = SI5351_ERR_INVALID_ARG;
                 }
@@ -349,8 +360,8 @@ si5351_err_t si5351_set_multisynth(si5351_ms_clk_reg_t ms, si5351_pll_reg_t pll_
         case SI5351_MS_CLK6:
         case SI5351_MS_CLK7:
 #if (SI5351_ALLOW_OVERCLOCKING == 0)
-            if (vco_freq > (frequency * SI5351_MULTISYNTH_INT_6_TO_7_MAX)) result = SI5351_ERR_INVALID_ARG;
-            if (vco_freq < (frequency * SI5351_MULTISYNTH_INT_6_TO_7_MIN)) result = SI5351_ERR_INVALID_ARG;
+            if (vco_freq > (frequency * SI5351_MULTISYNTH_INT_0_TO_7_MAX)) result = SI5351_ERR_INVALID_ARG;
+            if (vco_freq < (frequency * SI5351_MULTISYNTH_INT_0_TO_7_MIN)) result = SI5351_ERR_INVALID_ARG;
             if (!si5351_is_even_integer(a)) result = SI5351_ERR_INVALID_ARG;
 #endif
             if ((vco_freq < a * (frequency + 1)) && (vco_freq > a * (frequency - 1))) result = SI5351_ERR_INVALID_ARG;
@@ -391,15 +402,17 @@ si5351_err_t si5351_set_multisynth_fractional(si5351_ms_clk_reg_t ms, si5351_pll
         case SI5351_MS_CLK5:
             if ((a == SI5351_MULTISYNTH_FRAC_0_TO_5_MAX) && (b > 0)) result = SI5351_ERR_INVALID_ARG;
             if ((a < SI5351_MULTISYNTH_FRAC_0_TO_5_MIN) || (a > SI5351_MULTISYNTH_FRAC_0_TO_5_MAX)) {
-                if (a == SI5351_MULTISYNTH_INT_0_TO_5_DIV4) {
-                    set_div4 = true;
-                    set_integer = true;
-                    b = 0;
-                    c = 1;
-                } else if (a == SI5351_MULTISYNTH_INT_0_TO_5_DIV6) {
-                    set_integer = true;
-                    b = 0;
-                    c = 1;
+                if (b == 0) {
+                    if (a == SI5351_MULTISYNTH_INT_0_TO_5_DIV4) {
+                        set_div4 = true;
+                        set_integer = true;
+                        c = 1;
+                    } else if ((a >= SI5351_MULTISYNTH_INT_0_TO_7_MIN) && (a <= SI5351_MULTISYNTH_INT_0_TO_7_MAX) && si5351_is_even_integer(a)) {
+                        set_integer = true;
+                        c = 1;
+                    } else {
+                        result = SI5351_ERR_INVALID_ARG;
+                    }
                 } else {
                     result = SI5351_ERR_INVALID_ARG;
                 }
@@ -408,7 +421,7 @@ si5351_err_t si5351_set_multisynth_fractional(si5351_ms_clk_reg_t ms, si5351_pll
         case SI5351_MS_CLK6:
         case SI5351_MS_CLK7:
 #if (SI5351_ALLOW_OVERCLOCKING == 0)
-            if ((a < SI5351_MULTISYNTH_INT_6_TO_7_MIN) || (a > SI5351_MULTISYNTH_INT_6_TO_7_MAX)) result = SI5351_ERR_INVALID_ARG;
+            if ((a < SI5351_MULTISYNTH_INT_0_TO_7_MIN) || (a > SI5351_MULTISYNTH_INT_0_TO_7_MAX)) result = SI5351_ERR_INVALID_ARG;
             if (!(si5351_is_even_integer(a))) result = SI5351_ERR_INVALID_ARG;
 #endif
             b = 0;
@@ -466,7 +479,7 @@ si5351_err_t si5351_set_multisynth_fractional(si5351_ms_clk_reg_t ms, si5351_pll
         }
         result = si5351_i2c_write(chip.i2c_address, si5351_clk_register[ms], data, 1);
         if (result == SI5351_OK) {
-            chip.ms[ms].ms_freq = (uint32_t)(((uint64_t)chip.pll[pll_source].vco_freq * c) / (c * a + b));
+            chip.ms[ms].frequency = (uint32_t)(((uint64_t)chip.pll[pll_source].frequency * c) / (c * a + b));
             chip.ms[ms].configured = true;
         }
     }
@@ -497,6 +510,22 @@ si5351_err_t si5351_set_multisynth_mode_integer(si5351_ms_clk_reg_t ms, bool int
             break;
         default:
             result = SI5351_ERR_INVALID_ARG;
+    }
+    return result;
+}
+
+si5351_err_t si5351_get_multisynth_frequency(si5351_ms_clk_reg_t ms, uint32_t* frequency)
+{
+    si5351_err_t result = SI5351_OK;
+    if ((ms >= 0) && (ms < SI5351_MS_CLK_COUNT)) {
+        if (!chip.ms[ms].configured) {
+            result = SI5351_ERR_NOT_INITIALISED;
+            *frequency = 0;
+        } else {
+            *frequency = chip.ms[ms].frequency;
+        }
+    } else {
+        result = SI5351_ERR_INVALID_ARG;
     }
     return result;
 }

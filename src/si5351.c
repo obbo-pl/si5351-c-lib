@@ -69,6 +69,7 @@ si5351_err_t si5351_init(si5351_variant_t variant,
                          bool unbreakable)
 {
     si5351_err_t result;
+    chip.variant = variant;
     SI5351_GOTO_ON_ERROR(si5351_get_revision_id(variant, &(chip.rev_id)), finish);
     chip.i2c_address = i2c_address;
     uint8_t timeout = SI5351_POWERUP_TIME_ms;
@@ -90,9 +91,11 @@ si5351_err_t si5351_init(si5351_variant_t variant,
     if ((clkin_frequency == 0) || ((clkin_frequency >= SI5351_CLKIN_MIN) && (clkin_frequency <= SI5351_CLKIN_MAX))) {
         chip.clkin_freq = clkin_frequency;
     } else {
+        chip.clkin_freq = 0;
         result = SI5351_ERR_INVALID_ARG;
-        goto finish;
     }
+    if ((chip.clkin_freq == 0) && (chip.crystal_freq == 0)) result = SI5351_ERR_INVALID_ARG;
+    if (result != SI5351_OK) goto finish;
     if (unbreakable) {
         // get current configuration
         si5351_get_ram();
@@ -165,6 +168,8 @@ si5351_err_t si5351_set_crystal_frequency(si5351_crystal_freq_t frequency)
     if ((frequency == SI5351_CRYSTAL_FREQ_25MHZ) || (frequency == SI5351_CRYSTAL_FREQ_27MHZ) || (frequency == SI5351_CRYSTAL_NONE)) {
         chip.crystal_freq = frequency * 1000000;
         result = SI5351_OK;
+    } else {
+        chip.crystal_freq = 0;
     }
     return result;
 }
@@ -183,8 +188,12 @@ si5351_err_t si5351_set_crystal_load(si5351_crystal_load_t cap)
 si5351_err_t si5351_set_pll_source(si5351_pll_source_t plla, si5351_pll_source_t pllb, si5351_clkin_divider_t div)
 {
     si5351_err_t result;
+    if ((div & ~(SI5351_PLL_INPUT_SOURCE_CLKIN_DIV_bm)) != 0) {
+        result = SI5351_ERR_INVALID_ARG;
+        goto finish;
+    }
     uint8_t data = div & SI5351_PLL_INPUT_SOURCE_CLKIN_DIV_bm;
-    if (!si5351_is_variant_c(chip.variant) && (plla == SI5351_PLL_CLKINT || pllb == SI5351_PLL_CLKINT)) {
+    if (!(si5351_is_variant_c(chip.variant)) && ((plla == SI5351_PLL_CLKINT) || (pllb == SI5351_PLL_CLKINT))) {
         result = SI5351_ERR_INVALID_ARG;
     } else {
         if (plla == SI5351_PLL_CLKINT) data |= SI5351_PLL_INPUT_SOURCE_PLLA_SRC_bm;
@@ -196,16 +205,16 @@ si5351_err_t si5351_set_pll_source(si5351_pll_source_t plla, si5351_pll_source_t
             chip.pll[SI5351_PLLB].source = pllb;
         }
     }
+finish:
     return result;
 }
 
 si5351_err_t si5351_set_pll_vco(si5351_pll_reg_t pll, uint32_t frequency)
 {
     si5351_err_t result = SI5351_OK;
-    if (!chip.initialised) {
-        result = SI5351_ERR_NOT_INITIALISED;
-        goto finish;
-    }
+    if ((pll < 0) || (pll >= SI5351_PLL_COUNT)) result = SI5351_ERR_INVALID_ARG;
+    if (!chip.initialised) result = SI5351_ERR_NOT_INITIALISED;
+    if (result != SI5351_OK) goto finish;
 #if (SI5351_ALLOW_OVERCLOCKING == 0)
     if (frequency < SI5351_PLL_VCO_MIN) frequency = SI5351_PLL_VCO_MIN;
     if (frequency > SI5351_PLL_VCO_MAX) frequency = SI5351_PLL_VCO_MAX;
@@ -231,22 +240,12 @@ si5351_err_t si5351_set_pll_vco_integer(si5351_pll_reg_t pll, uint8_t a)
 si5351_err_t si5351_set_pll_vco_fractional(si5351_pll_reg_t pll, uint8_t a, uint32_t b, uint32_t c)
 {
     si5351_err_t result = SI5351_OK;
-    if (!chip.initialised) {
-        result = SI5351_ERR_NOT_INITIALISED;
-        goto finish;
-    }
-    if ((c == 0) || (b >= c)) {
-        result = SI5351_ERR_INVALID_ARG;
-        goto finish;
-    }
-    if ((a < SI5351_PLL_INT_MIN) || (a > SI5351_PLL_INT_MAX)) {
-        result = SI5351_ERR_INVALID_ARG;
-        goto finish;
-    }
-    if ((pll == SI5351_PLLB) && si5351_is_variant_b(chip.variant) && (c != 0xF4240)) {
-        result = SI5351_ERR_INVALID_ARG;
-        goto finish;
-    }
+    if ((pll < 0) || (pll >= SI5351_PLL_COUNT)) result = SI5351_ERR_INVALID_ARG;
+    if (!chip.initialised) result = SI5351_ERR_NOT_INITIALISED;
+    if ((c == 0) || (b >= c)) result = SI5351_ERR_INVALID_ARG;
+    if ((a < SI5351_PLL_INT_MIN) || (a > SI5351_PLL_INT_MAX)) result = SI5351_ERR_INVALID_ARG;
+    if ((pll == SI5351_PLLB) && si5351_is_variant_b(chip.variant) && (c != 0xF4240)) result = SI5351_ERR_INVALID_ARG;
+    if (result != SI5351_OK) goto finish;
     uint32_t frequency = (uint32_t)(((uint64_t)chip.crystal_freq * b) / c + chip.crystal_freq * a);
 #if (SI5351_ALLOW_OVERCLOCKING == 0)
     if ((frequency < SI5351_PLL_VCO_MIN) || (frequency > SI5351_PLL_VCO_MAX)) {
@@ -318,6 +317,9 @@ si5351_err_t si5351_get_pll_frequency(si5351_pll_reg_t pll, uint32_t* frequency)
 si5351_err_t si5351_set_multisynth(si5351_ms_clk_reg_t ms, si5351_pll_reg_t pll_source, uint32_t frequency)
 {
     si5351_err_t result = SI5351_OK;
+    if ((ms < 0) || (ms >= SI5351_MS_CLK_COUNT)) result = SI5351_ERR_INVALID_ARG;
+    if ((pll_source < 0) || (pll_source >= SI5351_PLL_COUNT)) result = SI5351_ERR_INVALID_ARG;
+    if (result != SI5351_OK) goto finish;
     if (!chip.pll[pll_source].configured) {
         result = SI5351_ERR_NOT_INITIALISED;
         goto finish;
@@ -383,14 +385,12 @@ si5351_err_t si5351_set_multisynth_integer(si5351_ms_clk_reg_t ms, si5351_pll_re
 si5351_err_t si5351_set_multisynth_fractional(si5351_ms_clk_reg_t ms, si5351_pll_reg_t pll_source, uint16_t a, uint32_t b, uint32_t c)
 {
     si5351_err_t result = SI5351_OK;
-    if (!chip.pll[pll_source].configured) {
-        result = SI5351_ERR_NOT_INITIALISED;
-        goto finish;
-    }
-    if ((c == 0) || (b >= c)) {
-        result = SI5351_ERR_INVALID_ARG;
-        goto finish;
-    }
+    if ((ms < 0) || (ms >= SI5351_MS_CLK_COUNT)) result = SI5351_ERR_INVALID_ARG;
+    if ((pll_source < 0) || (pll_source >= SI5351_PLL_COUNT)) result = SI5351_ERR_INVALID_ARG;
+    if (result != SI5351_OK) goto finish;
+    if (!chip.pll[pll_source].configured) result = SI5351_ERR_NOT_INITIALISED;
+    if ((c == 0) || (b >= c)) result = SI5351_ERR_INVALID_ARG;
+    if (result != SI5351_OK) goto finish;
     bool set_div4 = false;
     bool set_integer = false;
     switch (ms) {
@@ -549,6 +549,8 @@ si5351_err_t si5351_set_clk(si5351_ms_clk_reg_t clk,
                             si5351_drv_strength_t drv_strength)
 {
     si5351_err_t result = SI5351_OK;
+    if ((clk < 0) || (clk >= SI5351_MS_CLK_COUNT)) result = SI5351_ERR_INVALID_ARG;
+    if (result != SI5351_OK) goto finish;
     switch (clk) {
         case SI5351_MS_CLK0:
             if (clk_source == SI5351_CLK_SOURCE_MS_0_OR_4) clk_source = SI5351_CLK_SOURCE_MS_X;
@@ -599,14 +601,18 @@ si5351_err_t si5351_set_clk_power_enable(si5351_ms_clk_reg_t clk, bool enable)
 {
     si5351_err_t result;
     uint8_t data;
-    result = si5351_i2c_read(chip.i2c_address, si5351_clk_register[clk], &data, 1);
-    if (result == SI5351_OK) {
-        if (enable) {
-            data &= ~(SI5351_CLK_CONTROL_CLK_PDN_bm);
-        } else {
-            data |= SI5351_CLK_CONTROL_CLK_PDN_bm;
+    if ((clk >= 0) && (clk < SI5351_MS_CLK_COUNT)) {
+        result = si5351_i2c_read(chip.i2c_address, si5351_clk_register[clk], &data, 1);
+        if (result == SI5351_OK) {
+            if (enable) {
+                data &= ~(SI5351_CLK_CONTROL_CLK_PDN_bm);
+            } else {
+                data |= SI5351_CLK_CONTROL_CLK_PDN_bm;
+            }
+            result = si5351_i2c_write(chip.i2c_address, si5351_clk_register[clk], &data, 1);
         }
-        result = si5351_i2c_write(chip.i2c_address, si5351_clk_register[clk], &data, 1);
+    } else {
+        result = SI5351_ERR_INVALID_ARG;
     }
     return result;
 }
@@ -623,14 +629,18 @@ si5351_err_t si5351_set_output_enable(si5351_ms_clk_reg_t clk, bool enable)
 {
     si5351_err_t result;
     uint8_t data;
-    result = si5351_i2c_read(chip.i2c_address, SI5351_OUTPUT_ENABLE_CONTROL, &data, 1);
-    if (result == SI5351_OK) {
-        if (enable) {
-            data &= ~(1 << clk);
-        } else {
-            data |= (1 << clk);
+    if ((clk >= 0) && (clk < SI5351_MS_CLK_COUNT)) {
+        result = si5351_i2c_read(chip.i2c_address, SI5351_OUTPUT_ENABLE_CONTROL, &data, 1);
+        if (result == SI5351_OK) {
+            if (enable) {
+                data &= ~(1 << clk);
+            } else {
+                data |= (1 << clk);
+            }
+            result = si5351_i2c_write(chip.i2c_address, SI5351_OUTPUT_ENABLE_CONTROL, &data, 1);
         }
-        result = si5351_i2c_write(chip.i2c_address, SI5351_OUTPUT_ENABLE_CONTROL, &data, 1);
+    } else {
+        result = SI5351_ERR_INVALID_ARG;
     }
     return result;
 }

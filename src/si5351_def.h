@@ -39,6 +39,8 @@ enum si5351_variant {
 #define SI5351_CLKIN_MIN                            (10000000UL)
 #define SI5351_CLKIN_MAX                            (100000000UL)
 #define SI5351_CLKIN_DIVIDER_MAX                    (8)
+#define SI5351_PLL_CLKIN_MIN                        (10000000UL)
+#define SI5351_PLL_CLKIN_MAX                        (40000000UL)
 #define SI5351_PLL_INT_MIN                          (15)
 #define SI5351_PLL_INT_MAX                          (90)
 #define SI5351_R_DIVIDER_MAX                        (128)

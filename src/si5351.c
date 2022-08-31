@@ -18,6 +18,7 @@ si5351_err_t si5351_set_default();
 si5351_err_t si5351_get_ram();
 si5351_err_t si5351_set_crystal_frequency(si5351_crystal_freq_t frequency);
 si5351_err_t si5351_get_revision_id(si5351_variant_t, si5351_revision_t* rev_id);
+uint32_t si5351_get_pll_source_frequency(si5351_pll_reg_t pll);
 si5351_err_t si5351_read_reg(uint8_t reg, uint8_t* data);
 si5351_err_t si5351_write_reg(uint8_t reg, uint8_t data);
 bool si5351_is_variant_b(si5351_variant_t variant);
@@ -45,6 +46,8 @@ const uint8_t si5351_multisynth_register[SI5351_MS_CLK_COUNT] = {
             goto jump;                          \
         }                                       \
     } while(0)
+
+#define SI5351_DIVIDE_ROUND(n, d)       (((n) + (d) / 2) / (d))
 
 si5351_t chip = {
         .initialised = false,
@@ -209,6 +212,16 @@ finish:
     return result;
 }
 
+uint32_t si5351_get_pll_source_frequency(si5351_pll_reg_t pll)
+{
+    uint32_t result = 0;
+    if ((pll >= 0) && (pll < SI5351_PLL_COUNT)) {
+        if (chip.pll[pll].source == SI5351_PLL_XTAL) result = chip.crystal_freq;
+        if (chip.pll[pll].source == SI5351_PLL_CLKINT) result = SI5351_DIVIDE_ROUND(chip.clkin_freq, chip.clkin_divider);
+    }
+    return result;
+}
+
 si5351_err_t si5351_set_pll_vco(si5351_pll_reg_t pll, uint32_t frequency)
 {
     si5351_err_t result = SI5351_OK;
@@ -219,13 +232,18 @@ si5351_err_t si5351_set_pll_vco(si5351_pll_reg_t pll, uint32_t frequency)
     if (frequency < SI5351_PLL_VCO_MIN) frequency = SI5351_PLL_VCO_MIN;
     if (frequency > SI5351_PLL_VCO_MAX) frequency = SI5351_PLL_VCO_MAX;
 #endif
-    uint8_t a = (uint8_t)(frequency / chip.crystal_freq);
-    if (chip.crystal_freq * a == frequency) {
+    uint32_t in_frequency = si5351_get_pll_source_frequency(pll);
+    if ((in_frequency < SI5351_PLL_CLKIN_MIN) || (in_frequency > SI5351_PLL_CLKIN_MAX)) {
+        result = SI5351_ERR_INVALID_ARG;
+        goto finish;
+    }
+    uint8_t a = (uint8_t)(frequency / in_frequency);
+    if (in_frequency * a == frequency) {
         result = si5351_set_pll_vco_integer(pll, a);
     } else {
         uint32_t c = 0xFFFFF;
         if ((pll == SI5351_PLLB) && si5351_is_variant_b(chip.variant)) c = 0xF4240;
-        uint32_t b = (uint32_t)((((uint64_t)(frequency % chip.crystal_freq)) * c) / chip.crystal_freq);
+        uint32_t b = (uint32_t)SI5351_DIVIDE_ROUND((((uint64_t)frequency % in_frequency) * c), in_frequency);
         result = si5351_set_pll_vco_fractional(pll, a, b, c);
     }
 finish:
@@ -246,7 +264,12 @@ si5351_err_t si5351_set_pll_vco_fractional(si5351_pll_reg_t pll, uint8_t a, uint
     if ((a < SI5351_PLL_INT_MIN) || (a > SI5351_PLL_INT_MAX)) result = SI5351_ERR_INVALID_ARG;
     if ((pll == SI5351_PLLB) && si5351_is_variant_b(chip.variant) && (c != 0xF4240)) result = SI5351_ERR_INVALID_ARG;
     if (result != SI5351_OK) goto finish;
-    uint32_t frequency = (uint32_t)(((uint64_t)chip.crystal_freq * b) / c + chip.crystal_freq * a);
+    uint32_t in_frequency = si5351_get_pll_source_frequency(pll);
+    if ((in_frequency < SI5351_PLL_CLKIN_MIN) || (in_frequency > SI5351_PLL_CLKIN_MAX)) {
+        result = SI5351_ERR_INVALID_ARG;
+        goto finish;
+    }
+    uint32_t frequency = (uint32_t)(SI5351_DIVIDE_ROUND((uint64_t)in_frequency * b, c) + in_frequency * a);
 #if (SI5351_ALLOW_OVERCLOCKING == 0)
     if ((frequency < SI5351_PLL_VCO_MIN) || (frequency > SI5351_PLL_VCO_MAX)) {
         result = SI5351_ERR_INVALID_ARG;
@@ -354,7 +377,7 @@ si5351_err_t si5351_set_multisynth(si5351_ms_clk_reg_t ms, si5351_pll_reg_t pll_
                     result = si5351_set_multisynth_integer(ms, pll_source, a);
                 } else {
                     uint32_t c = 0xFFFFF;
-                    uint32_t b = (uint32_t)((((uint64_t)(vco_freq % frequency)) * c) / frequency);
+                    uint32_t b = (uint32_t)SI5351_DIVIDE_ROUND((uint64_t)(vco_freq % frequency) * c, frequency);
                     result = si5351_set_multisynth_fractional(ms, pll_source, a, b, c);
                 }
             }
@@ -479,7 +502,7 @@ si5351_err_t si5351_set_multisynth_fractional(si5351_ms_clk_reg_t ms, si5351_pll
         }
         result = si5351_i2c_write(chip.i2c_address, si5351_clk_register[ms], data, 1);
         if (result == SI5351_OK) {
-            chip.ms[ms].frequency = (uint32_t)(((uint64_t)chip.pll[pll_source].frequency * c) / (c * a + b));
+            chip.ms[ms].frequency = (uint32_t)SI5351_DIVIDE_ROUND((uint64_t)chip.pll[pll_source].frequency * c, c * a + b);
             chip.ms[ms].configured = true;
         }
     }

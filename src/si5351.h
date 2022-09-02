@@ -201,6 +201,7 @@ si5351_err_t si5351_set_pll_source(si5351_pll_source_t plla, si5351_pll_source_t
 si5351_err_t si5351_set_pll_vco(si5351_pll_reg_t pll, uint32_t frequency);
 si5351_err_t si5351_set_pll_vco_integer(si5351_pll_reg_t pll, uint8_t a);
 si5351_err_t si5351_set_pll_vco_fractional(si5351_pll_reg_t pll, uint8_t a, uint32_t b, uint32_t c);
+si5351_err_t si5351_set_pll_mode_integer(si5351_pll_reg_t pll, bool integer);
 si5351_err_t si5351_get_pll_frequency(si5351_pll_reg_t pll, uint32_t* frequency);
 si5351_err_t si5351_set_multisynth(si5351_ms_clk_reg_t ms, si5351_pll_reg_t pll_source, uint32_t frequency);
 si5351_err_t si5351_set_multisynth_integer(si5351_ms_clk_reg_t ms, si5351_pll_reg_t pll_source, uint16_t a);
@@ -218,6 +219,7 @@ si5351_err_t si5351_set_clk_power_enable(si5351_ms_clk_reg_t clk, bool enable);
 si5351_err_t si5351_reset_pll();
 si5351_err_t si5351_set_output_enable(si5351_ms_clk_reg_t clk, bool enable);
 si5351_err_t si5351_set_powerdown();
+
 
 
 #ifdef __cplusplus

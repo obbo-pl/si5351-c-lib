@@ -40,6 +40,10 @@ const uint8_t si5351_multisynth_register[SI5351_MS_CLK_COUNT] = {
     SI5351_MULTISYNTH6_PARAMETERS, SI5351_MULTISYNTH7_PARAMETERS
 };
 
+const uint8_t si5351_pll_int_register[SI5351_PLL_COUNT] = {
+    SI5351_CLK6_CONTROL, SI5351_CLK7_CONTROL
+};
+
 #define SI5351_GOTO_ON_ERROR(x,jump) do {       \
         result = x;                             \
         if (result != ESP_OK) {                 \
@@ -318,6 +322,27 @@ si5351_err_t si5351_set_pll_vco_fractional(si5351_pll_reg_t pll, uint8_t a, uint
         chip.pll[pll].configured = true;
     }
 finish:
+    return result;
+}
+
+si5351_err_t si5351_set_pll_mode_integer(si5351_pll_reg_t pll, bool integer)
+{
+    si5351_err_t result = SI5351_OK;
+    if ((pll >= 0) && (pll < SI5351_PLL_COUNT)) {
+        uint8_t reg = si5351_pll_int_register[pll];
+        uint8_t data;
+        result = si5351_i2c_read(chip.i2c_address, reg, &data, 1);
+        if (result == SI5351_OK) {
+            if (integer) {
+                data |= SI5351_CLK_CONTROL_FB_INT_bm;
+            } else {
+                data &= ~(SI5351_CLK_CONTROL_FB_INT_bm);
+            }
+            result = si5351_i2c_write(chip.i2c_address, reg, &data, 1);
+        }
+    } else {
+        result = SI5351_ERR_INVALID_ARG;
+    }
     return result;
 }
 

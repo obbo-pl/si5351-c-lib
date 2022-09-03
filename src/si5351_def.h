@@ -156,6 +156,9 @@ enum {
 #define SI5351_CLK3_INITIAL_PHASE_OFFSET            168
 #define SI5351_CLK4_INITIAL_PHASE_OFFSET            169
 #define SI5351_CLK5_INITIAL_PHASE_OFFSET            170
+enum {
+    SI5351_CLK_INITIAL_PHASE_OFFSET_bm              = 0x7F
+};
 #define SI5351_PLL_RESET                            177
 enum {
     SI5351_PLL_RESET_PLLA_RST_bm                    = 0x20, // PLLA_Reset.

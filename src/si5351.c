@@ -673,6 +673,15 @@ finish:
     return result;
 }
 
+si5351_err_t si5351_set_clk_initial_phase(si5351_ms_clk_reg_t clk, uint8_t phase)
+{
+    si5351_err_t result = SI5351_OK;
+    if ((clk < 0) || (clk > SI5351_MS_CLK5)) result = SI5351_ERR_INVALID_ARG;
+    if (phase > SI5351_CLK_INITIAL_PHASE_OFFSET_bm) phase = SI5351_CLK_INITIAL_PHASE_OFFSET_bm;
+    result = si5351_i2c_write(chip.i2c_address, SI5351_CLK0_INITIAL_PHASE_OFFSET + (uint8_t)clk, &phase, 1);
+    return result;
+}
+
 si5351_err_t si5351_set_clk_power_enable(si5351_ms_clk_reg_t clk, bool enable)
 {
     si5351_err_t result;

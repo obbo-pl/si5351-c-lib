@@ -223,6 +223,7 @@ si5351_err_t si5351_set_clk(si5351_ms_clk_reg_t clk,
                             si5351_clk_source_t clk_source,
                             si5351_clk_r_div_t r,
                             si5351_drv_strength_t drv_strength);
+si5351_err_t si5351_set_clk_initial_phase(si5351_ms_clk_reg_t clk, uint8_t phase);
 si5351_err_t si5351_set_clk_power_enable(si5351_ms_clk_reg_t clk, bool enable);
 si5351_err_t si5351_reset_pll();
 si5351_err_t si5351_set_output_enable(si5351_ms_clk_reg_t clk, bool enable);

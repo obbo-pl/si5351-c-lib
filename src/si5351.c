@@ -593,6 +593,30 @@ si5351_err_t si5351_set_fanout(bool clkin, bool xo, bool ms)
     return result;
 }
 
+si5351_err_t si5351_set_clk_disable_state(si5351_ms_clk_reg_t clk, si5351_clk_state_t state)
+{
+    si5351_err_t result = SI5351_OK;
+    if ((clk < 0) || (clk >= SI5351_MS_CLK_COUNT)) result = SI5351_ERR_INVALID_ARG;
+    if ((state & ~(SI5351_CLK0_TO_7_DISABLE_STATE_CLK_bm)) != 0x00) result = SI5351_ERR_INVALID_ARG;
+    if (result == SI5351_OK) {
+        uint8_t reg;
+        if (clk <= SI5351_MS_CLK3) {
+            reg = SI5351_CLK3_TO_0_DISABLE_STATE;
+        } else {
+            reg = SI5351_CLK7_TO_4_DISABLE_STATE;
+            clk = clk - 4;
+        }
+        uint8_t data;
+        result = si5351_i2c_read(chip.i2c_address, reg, &data, 1);
+        if (result == SI5351_OK) {
+            data &= ~(SI5351_CLK0_TO_7_DISABLE_STATE_CLK_bm << (2 * clk));
+            data |= ((state & SI5351_CLK0_TO_7_DISABLE_STATE_CLK_bm) << (2 * clk));
+            result = si5351_i2c_write(chip.i2c_address, reg, &data, 1);
+        }
+    }
+    return result;
+}
+
 si5351_err_t si5351_set_clk(si5351_ms_clk_reg_t clk,
                             bool powerup,
                             bool inverted,

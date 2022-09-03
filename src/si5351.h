@@ -81,6 +81,13 @@ typedef enum {
 } si5351_clk_source_t;
 
 typedef enum {
+    SI5351_CLK_STATE_LOW        = SI5351_CLK0_TO_7_DISABLE_STATE_CLK_LOW_bm,
+    SI5351_CLK_STATE_HIGH       = SI5351_CLK0_TO_7_DISABLE_STATE_CLK_HIGH_bm,
+    SI5351_CLK_STATE_HIGHIMP    = SI5351_CLK0_TO_7_DISABLE_STATE_CLK_HIGHIMP_bm,
+    SI5351_CLK_STATE_NEVER      = SI5351_CLK0_TO_7_DISABLE_STATE_CLK_NEVER_bm
+} si5351_clk_state_t;
+
+typedef enum {
     SI5351_DRIVE_STRENGTH_2mA   = SI5351_CLK_CONTROL_CLK_IDRV_2mA_bm,
     SI5351_DRIVE_STRENGTH_4mA   = SI5351_CLK_CONTROL_CLK_IDRV_4mA_bm,
     SI5351_DRIVE_STRENGTH_6mA   = SI5351_CLK_CONTROL_CLK_IDRV_6mA_bm,
@@ -209,6 +216,7 @@ si5351_err_t si5351_set_multisynth_fractional(si5351_ms_clk_reg_t ms, si5351_pll
 si5351_err_t si5351_set_multisynth_mode_integer(si5351_ms_clk_reg_t ms, bool integer);
 si5351_err_t si5351_get_multisynth_frequency(si5351_ms_clk_reg_t ms, uint32_t* frequency);
 si5351_err_t si5351_set_fanout(bool clkin, bool xtal, bool ms);
+si5351_err_t si5351_set_clk_disable_state(si5351_ms_clk_reg_t clk, si5351_clk_state_t state);
 si5351_err_t si5351_set_clk(si5351_ms_clk_reg_t clk,
                             bool powerup,
                             bool inverted,

@@ -109,7 +109,7 @@ enum {
     SI5351_CLK_CONTROL_CLK_INV_bm                   = 0x10, // Output Clock Invert.
     SI5351_CLK_CONTROL_MS_SRC_bm                    = 0x20, // MultiSynth Source Select for CLK.
     SI5351_CLK_CONTROL_MS_INT_bm                    = 0x40, // MultiSynth Integer Mode. CLK0 to CLK5
-    SI5351_CLK_CONTROL_FB_INT_bm                    = 0x40, // FBA MultiSynth Integer Mode.
+    SI5351_CLK_CONTROL_FB_INT_bm                    = 0x40, // FBA, FBB MultiSynth Integer Mode.
     SI5351_CLK_CONTROL_CLK_PDN_bm                   = 0x80, // Clock Power Down
 };
 

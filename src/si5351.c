@@ -123,7 +123,7 @@ si5351_err_t si5351_set_default()
     SI5351_GOTO_ON_ERROR(si5351_write_reg(SI5351_INTERRUPT_STATUS_STICKY, 0x00), finish);
     SI5351_GOTO_ON_ERROR(si5351_write_reg(SI5351_INTERRUPT_STATUS_MASK, 0x00), finish);
     SI5351_GOTO_ON_ERROR(si5351_write_reg(SI5351_OEB_PIN_ENABLE_CONTROL_MASK, 0x00), finish);
-    SI5351_GOTO_ON_ERROR(si5351_write_reg(SI5351_PLL_INPUT_SOURCE, 0x00), finish);
+    SI5351_GOTO_ON_ERROR(si5351_set_pll_source(SI5351_PLL_XTAL, SI5351_PLL_XTAL, SI5351_CLKIN_DIVIDER1), finish);
 #if (SI5351_DEFAULT_CLK_POWERDOWN == 0)
     uint8_t clk_state = 0x00;
 #else
@@ -199,18 +199,22 @@ si5351_err_t si5351_set_pll_source(si5351_pll_source_t plla, si5351_pll_source_t
         result = SI5351_ERR_INVALID_ARG;
         goto finish;
     }
-    uint8_t data = div & SI5351_PLL_INPUT_SOURCE_CLKIN_DIV_bm;
-    if (!(si5351_is_variant_c(chip.variant)) && ((plla == SI5351_PLL_CLKINT) || (pllb == SI5351_PLL_CLKINT))) {
-        result = SI5351_ERR_INVALID_ARG;
-    } else {
-        if (plla == SI5351_PLL_CLKINT) data |= SI5351_PLL_INPUT_SOURCE_PLLA_SRC_bm;
-        if (pllb == SI5351_PLL_CLKINT) data |= SI5351_PLL_INPUT_SOURCE_PLLB_SRC_bm;
-        result = si5351_i2c_write(chip.i2c_address, SI5351_PLL_INPUT_SOURCE, &data, 1);
-        if (result == SI5351_OK) {
-            chip.clkin_divider = (1 << ((div & SI5351_PLL_INPUT_SOURCE_CLKIN_DIV_bm) >> SI5351_PLL_INPUT_SOURCE_CLKIN_DIV_bp));
-            chip.pll[SI5351_PLLA].source = plla;
-            chip.pll[SI5351_PLLB].source = pllb;
+    if (((plla == SI5351_PLL_XTAL) || (plla == SI5351_PLL_CLKINT)) && ((pllb == SI5351_PLL_XTAL) || (pllb == SI5351_PLL_CLKINT))) {
+        if (!(si5351_is_variant_c(chip.variant)) && ((plla == SI5351_PLL_CLKINT) || (pllb == SI5351_PLL_CLKINT))) {
+            result = SI5351_ERR_INVALID_ARG;
+        } else {
+            uint8_t data = div & SI5351_PLL_INPUT_SOURCE_CLKIN_DIV_bm;
+            if (plla == SI5351_PLL_CLKINT) data |= SI5351_PLL_INPUT_SOURCE_PLLA_SRC_bm;
+            if (pllb == SI5351_PLL_CLKINT) data |= SI5351_PLL_INPUT_SOURCE_PLLB_SRC_bm;
+            result = si5351_i2c_write(chip.i2c_address, SI5351_PLL_INPUT_SOURCE, &data, 1);
+            if (result == SI5351_OK) {
+                chip.clkin_divider = (1 << ((div & SI5351_PLL_INPUT_SOURCE_CLKIN_DIV_bm) >> SI5351_PLL_INPUT_SOURCE_CLKIN_DIV_bp));
+                chip.pll[SI5351_PLLA].source = plla;
+                chip.pll[SI5351_PLLB].source = pllb;
+            }
         }
+    } else {
+        result = SI5351_ERR_INVALID_ARG;
     }
 finish:
     return result;

@@ -30,8 +30,8 @@ enum si5351_variant {
     SI5351_VARIANT_C_B_GM1,                         // Si5351, Crystal In + CLKIN, Revision B, 16-QFN
 };
 
-#define SI5351_I2C_ADDR_0                           0x60    // All
-#define SI5351_I2C_ADDR_1                           0x61    // Si5351A 20-QFN, Si5351A 16-QFN only
+#define SI5351_I2C_ADDR_0                           0x60  // All
+#define SI5351_I2C_ADDR_1                           0x61  // Si5351A 20-QFN, 24-QSOP, 16-QFN only
                                                     
 #define SI5351_POWERUP_TIME_ms                      (10)
 #define SI5351_PLL_VCO_MIN                          (600000000UL)
@@ -64,12 +64,12 @@ enum si5351_variant {
 
 #define SI5351_DEVICE_STATUS                        0
 enum {
-    SI5351_DEVICE_STATUS_REVID_bm                   = 0x03,    // Revision [1:0].
-    SI5351_DEVICE_STATUS_LOS_XTAL_bm                = 0x08,    // Crystal Loss of Signal.
-    SI5351_DEVICE_STATUS_LOS_CLKIN_bm               = 0x10,    // CLKIN Loss Of Signal (Si5351C Only).
-    SI5351_DEVICE_STATUS_LOL_A_bm                   = 0x20,    // PLLA Loss Of Lock Status.
-    SI5351_DEVICE_STATUS_LOL_B_bm                   = 0x40,    // PLLB Loss Of Lock Status.
-    SI5351_DEVICE_STATUS_SYS_INIT_bm                = 0x80,    // System Initialization Status.
+    SI5351_DEVICE_STATUS_REVID_bm                   = 0x03, // Revision [1:0].
+    SI5351_DEVICE_STATUS_LOS_XTAL_bm                = 0x08, // Crystal Loss of Signal.
+    SI5351_DEVICE_STATUS_LOS_CLKIN_bm               = 0x10, // CLKIN Loss Of Signal (Si5351C Only).
+    SI5351_DEVICE_STATUS_LOL_A_bm                   = 0x20, // PLLA Loss Of Lock Status.
+    SI5351_DEVICE_STATUS_LOL_B_bm                   = 0x40, // PLLB Loss Of Lock Status.
+    SI5351_DEVICE_STATUS_SYS_INIT_bm                = 0x80, // System Initialization Status.
 };
 #define SI5351_INTERRUPT_STATUS_STICKY              1
 #define SI5351_INTERRUPT_STATUS_MASK                2

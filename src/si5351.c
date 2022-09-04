@@ -21,6 +21,7 @@ si5351_err_t si5351_get_revision_id(si5351_variant_t, si5351_revision_t* rev_id)
 uint32_t si5351_get_pll_source_frequency(si5351_pll_reg_t pll);
 si5351_err_t si5351_read_reg(uint8_t reg, uint8_t* data);
 si5351_err_t si5351_write_reg(uint8_t reg, uint8_t data);
+bool si5351_is_clk_source_valid(si5351_ms_clk_reg_t clk, si5351_clk_source_t* clk_source);
 bool si5351_is_variant_b(si5351_variant_t variant);
 bool si5351_is_variant_c(si5351_variant_t variant);
 bool si5351_is_even_integer(uint16_t val);
@@ -147,7 +148,7 @@ si5351_err_t si5351_set_default()
     SI5351_GOTO_ON_ERROR(si5351_write_reg(SI5351_CLK5_INITIAL_PHASE_OFFSET, 0x00), finish);
     SI5351_GOTO_ON_ERROR(si5351_write_reg(SI5351_SPREAD_SPECTRUM_PARAMETERS, 0x00), finish);
     SI5351_GOTO_ON_ERROR(si5351_set_crystal_load(SI5351_CRYSTAL_LOAD_10PF), finish);
-    SI5351_GOTO_ON_ERROR(si5351_write_reg(SI5351_FANOUT_ENABLE, 0x00), finish);
+    SI5351_GOTO_ON_ERROR(si5351_set_fanout(false, false, false), finish);
 finish:
     return result;
 }
@@ -223,7 +224,7 @@ finish:
 uint32_t si5351_get_pll_source_frequency(si5351_pll_reg_t pll)
 {
     uint32_t result = 0;
-    if ((pll >= 0) && (pll < SI5351_PLL_COUNT)) {
+    if ((pll >= SI5351_PLLA) && (pll < SI5351_PLL_COUNT)) {
         if (chip.pll[pll].source == SI5351_PLL_XTAL) result = chip.crystal_freq;
         if (chip.pll[pll].source == SI5351_PLL_CLKINT) result = SI5351_DIVIDE_ROUND(chip.clkin_freq, chip.clkin_divider);
     }
@@ -233,7 +234,7 @@ uint32_t si5351_get_pll_source_frequency(si5351_pll_reg_t pll)
 si5351_err_t si5351_set_pll_vco(si5351_pll_reg_t pll, uint32_t frequency)
 {
     si5351_err_t result = SI5351_OK;
-    if ((pll < 0) || (pll >= SI5351_PLL_COUNT)) result = SI5351_ERR_INVALID_ARG;
+    if ((pll < SI5351_PLLA) || (pll >= SI5351_PLL_COUNT)) result = SI5351_ERR_INVALID_ARG;
     if (!chip.initialised) result = SI5351_ERR_NOT_INITIALISED;
     if (result != SI5351_OK) goto finish;
 #if (SI5351_ALLOW_OVERCLOCKING == 0)
@@ -266,7 +267,7 @@ si5351_err_t si5351_set_pll_vco_integer(si5351_pll_reg_t pll, uint8_t a)
 si5351_err_t si5351_set_pll_vco_fractional(si5351_pll_reg_t pll, uint8_t a, uint32_t b, uint32_t c)
 {
     si5351_err_t result = SI5351_OK;
-    if ((pll < 0) || (pll >= SI5351_PLL_COUNT)) result = SI5351_ERR_INVALID_ARG;
+    if ((pll < SI5351_PLLA) || (pll >= SI5351_PLL_COUNT)) result = SI5351_ERR_INVALID_ARG;
     if (!chip.initialised) result = SI5351_ERR_NOT_INITIALISED;
     if ((c == 0) || (b >= c)) result = SI5351_ERR_INVALID_ARG;
     if ((a < SI5351_PLL_INT_MIN) || (a > SI5351_PLL_INT_MAX)) result = SI5351_ERR_INVALID_ARG;
@@ -332,7 +333,7 @@ finish:
 si5351_err_t si5351_set_pll_mode_integer(si5351_pll_reg_t pll, bool integer)
 {
     si5351_err_t result = SI5351_OK;
-    if ((pll >= 0) && (pll < SI5351_PLL_COUNT)) {
+    if ((pll >= SI5351_PLLA) && (pll < SI5351_PLL_COUNT)) {
         uint8_t reg = si5351_pll_int_register[pll];
         uint8_t data;
         result = si5351_i2c_read(chip.i2c_address, reg, &data, 1);
@@ -353,7 +354,7 @@ si5351_err_t si5351_set_pll_mode_integer(si5351_pll_reg_t pll, bool integer)
 si5351_err_t si5351_get_pll_frequency(si5351_pll_reg_t pll, uint32_t* frequency)
 {
     si5351_err_t result = SI5351_OK;
-    if ((pll >= 0) && (pll < SI5351_PLL_COUNT)) {
+    if ((pll >= SI5351_PLLA) && (pll < SI5351_PLL_COUNT)) {
         if (!chip.pll[pll].configured) {
             result = SI5351_ERR_NOT_INITIALISED;
             *frequency = 0;
@@ -366,11 +367,19 @@ si5351_err_t si5351_get_pll_frequency(si5351_pll_reg_t pll, uint32_t* frequency)
     return result;
 }
 
+si5351_err_t si5351_reset_pll()
+{
+    si5351_err_t result;
+    uint8_t data = SI5351_PLL_RESET_PLLA_RST_bm | SI5351_PLL_RESET_PLLB_RST_bm;
+    result = si5351_i2c_write(chip.i2c_address, SI5351_PLL_RESET, &data, 1);
+    return result;
+}
+
 si5351_err_t si5351_set_multisynth(si5351_ms_clk_reg_t ms, si5351_pll_reg_t pll_source, uint32_t frequency)
 {
     si5351_err_t result = SI5351_OK;
-    if ((ms < 0) || (ms >= SI5351_MS_CLK_COUNT)) result = SI5351_ERR_INVALID_ARG;
-    if ((pll_source < 0) || (pll_source >= SI5351_PLL_COUNT)) result = SI5351_ERR_INVALID_ARG;
+    if ((ms < SI5351_MS_CLK0) || (ms >= SI5351_MS_CLK_COUNT)) result = SI5351_ERR_INVALID_ARG;
+    if ((pll_source < SI5351_PLLA) || (pll_source >= SI5351_PLL_COUNT)) result = SI5351_ERR_INVALID_ARG;
     if (result != SI5351_OK) goto finish;
     if (!chip.pll[pll_source].configured) {
         result = SI5351_ERR_NOT_INITIALISED;
@@ -437,8 +446,8 @@ si5351_err_t si5351_set_multisynth_integer(si5351_ms_clk_reg_t ms, si5351_pll_re
 si5351_err_t si5351_set_multisynth_fractional(si5351_ms_clk_reg_t ms, si5351_pll_reg_t pll_source, uint16_t a, uint32_t b, uint32_t c)
 {
     si5351_err_t result = SI5351_OK;
-    if ((ms < 0) || (ms >= SI5351_MS_CLK_COUNT)) result = SI5351_ERR_INVALID_ARG;
-    if ((pll_source < 0) || (pll_source >= SI5351_PLL_COUNT)) result = SI5351_ERR_INVALID_ARG;
+    if ((ms < SI5351_MS_CLK0) || (ms >= SI5351_MS_CLK_COUNT)) result = SI5351_ERR_INVALID_ARG;
+    if ((pll_source < SI5351_PLLA) || (pll_source >= SI5351_PLL_COUNT)) result = SI5351_ERR_INVALID_ARG;
     if (result != SI5351_OK) goto finish;
     if (!chip.pll[pll_source].configured) result = SI5351_ERR_NOT_INITIALISED;
     if ((c == 0) || (b >= c)) result = SI5351_ERR_INVALID_ARG;
@@ -568,16 +577,14 @@ si5351_err_t si5351_set_multisynth_mode_integer(si5351_ms_clk_reg_t ms, bool int
 
 si5351_err_t si5351_get_multisynth_frequency(si5351_ms_clk_reg_t ms, uint32_t* frequency)
 {
-    si5351_err_t result = SI5351_OK;
-    if ((ms >= 0) && (ms < SI5351_MS_CLK_COUNT)) {
+    si5351_err_t result = SI5351_ERR_INVALID_ARG;
+    if ((ms >= SI5351_MS_CLK0) && (ms < SI5351_MS_CLK_COUNT)) {
         if (!chip.ms[ms].configured) {
             result = SI5351_ERR_NOT_INITIALISED;
             *frequency = 0;
         } else {
             *frequency = chip.ms[ms].frequency;
         }
-    } else {
-        result = SI5351_ERR_INVALID_ARG;
     }
     return result;
 }
@@ -590,30 +597,30 @@ si5351_err_t si5351_set_fanout(bool clkin, bool xo, bool ms)
     if (xo) data |= SI5351_FANOUT_ENABLE_XO_bm;
     if (ms) data |= SI5351_FANOUT_ENABLE_MS_bm;
     result = si5351_i2c_write(chip.i2c_address, SI5351_FANOUT_ENABLE, &data, 1);
+    if (result == SI5351_OK) chip.fanout_bm = data;
     return result;
 }
 
 si5351_err_t si5351_set_clk_disable_state(si5351_ms_clk_reg_t clk, si5351_clk_state_t state)
 {
-    si5351_err_t result = SI5351_OK;
-    if ((clk < 0) || (clk >= SI5351_MS_CLK_COUNT)) result = SI5351_ERR_INVALID_ARG;
-    if ((state & ~(SI5351_CLK0_TO_7_DISABLE_STATE_CLK_bm)) != 0x00) result = SI5351_ERR_INVALID_ARG;
-    if (result == SI5351_OK) {
-        uint8_t reg;
-        if (clk <= SI5351_MS_CLK3) {
-            reg = SI5351_CLK3_TO_0_DISABLE_STATE;
-        } else {
-            reg = SI5351_CLK7_TO_4_DISABLE_STATE;
-            clk = clk - 4;
-        }
-        uint8_t data;
-        result = si5351_i2c_read(chip.i2c_address, reg, &data, 1);
-        if (result == SI5351_OK) {
-            data &= ~(SI5351_CLK0_TO_7_DISABLE_STATE_CLK_bm << (2 * clk));
-            data |= ((state & SI5351_CLK0_TO_7_DISABLE_STATE_CLK_bm) << (2 * clk));
-            result = si5351_i2c_write(chip.i2c_address, reg, &data, 1);
-        }
+    si5351_err_t result = SI5351_ERR_INVALID_ARG;
+    if ((clk < SI5351_MS_CLK0) || (clk >= SI5351_MS_CLK_COUNT)) goto finish;
+    if ((state & ~(SI5351_CLK0_TO_7_DISABLE_STATE_CLK_bm)) != 0x00) goto finish;
+    uint8_t reg;
+    if (clk <= SI5351_MS_CLK3) {
+        reg = SI5351_CLK3_TO_0_DISABLE_STATE;
+    } else {
+        reg = SI5351_CLK7_TO_4_DISABLE_STATE;
+        clk = clk - 4;
     }
+    uint8_t data;
+    result = si5351_i2c_read(chip.i2c_address, reg, &data, 1);
+    if (result == SI5351_OK) {
+        data &= ~(SI5351_CLK0_TO_7_DISABLE_STATE_CLK_bm << (2 * clk));
+        data |= ((state & SI5351_CLK0_TO_7_DISABLE_STATE_CLK_bm) << (2 * clk));
+        result = si5351_i2c_write(chip.i2c_address, reg, &data, 1);
+    }
+finish:
     return result;
 }
 
@@ -624,50 +631,27 @@ si5351_err_t si5351_set_clk(si5351_ms_clk_reg_t clk,
                             si5351_clk_r_div_t r,
                             si5351_drv_strength_t drv_strength)
 {
-    si5351_err_t result = SI5351_OK;
-    if ((clk < 0) || (clk >= SI5351_MS_CLK_COUNT)) result = SI5351_ERR_INVALID_ARG;
-    if (result != SI5351_OK) goto finish;
-    switch (clk) {
-        case SI5351_MS_CLK0:
-            if (clk_source == SI5351_CLK_SOURCE_MS_0_OR_4) clk_source = SI5351_CLK_SOURCE_MS_X;
-            break;
-        case SI5351_MS_CLK1:
-        case SI5351_MS_CLK2:
-        case SI5351_MS_CLK3:
-            if ((clk_source == SI5351_CLK_SOURCE_MS_0_OR_4) && !(chip.ms[SI5351_MS_CLK0].configured)) result = SI5351_ERR_NOT_INITIALISED;
-            break;
-        case SI5351_MS_CLK4:
-            if (clk_source == SI5351_CLK_SOURCE_MS_0_OR_4) clk_source = SI5351_CLK_SOURCE_MS_X;
-            break;
-        case SI5351_MS_CLK5:
-        case SI5351_MS_CLK6:
-        case SI5351_MS_CLK7:
-            if ((clk_source == SI5351_CLK_SOURCE_MS_0_OR_4) && !(chip.ms[SI5351_MS_CLK4].configured)) result = SI5351_ERR_NOT_INITIALISED;
-            break;
-        default:
-            result = SI5351_ERR_INVALID_ARG;
-    }
-    if ((clk_source == SI5351_CLK_SOURCE_MS_X) && !(chip.ms[clk].configured)) result = SI5351_ERR_NOT_INITIALISED;
-    if ((r & ~(SI5351_MULTISYNTH0_PARAMETERS_R_DIVIDER_bm)) != 0) result = SI5351_ERR_INVALID_ARG;
-    if (result != SI5351_OK) goto finish;
-    uint8_t data;
-    result = si5351_i2c_read(chip.i2c_address, si5351_clk_register[clk], &data, 1);
-    if (result != SI5351_OK) goto finish;
-    data &= ~(SI5351_CLK_CONTROL_CLK_SRC_bm);
-    data |= clk_source & SI5351_CLK_CONTROL_CLK_SRC_bm;
-    data &= ~(SI5351_CLK_CONTROL_CLK_IDRV_bm);
-    data |= drv_strength & SI5351_CLK_CONTROL_CLK_IDRV_bm;
-    data &= ~(SI5351_CLK_CONTROL_CLK_INV_bm);
-    if (inverted) data |= SI5351_CLK_CONTROL_CLK_INV_bm;
-    data &= ~(SI5351_CLK_CONTROL_CLK_PDN_bm);
-    if (!powerup) data |= SI5351_CLK_CONTROL_CLK_PDN_bm;
-    result = si5351_i2c_write(chip.i2c_address, si5351_clk_register[clk], &data, 1);
-    if (result != SI5351_OK) goto finish;
-    result = si5351_i2c_read(chip.i2c_address, si5351_multisynth_register[clk] + 2, &data, 1);
-    if (result == SI5351_OK) {
-        data &= ~(SI5351_MULTISYNTH0_PARAMETERS_R_DIVIDER_bm);
-        data |= r;
-        result = si5351_i2c_write(chip.i2c_address, si5351_multisynth_register[clk] + 2, &data, 1);
+    si5351_err_t result = SI5351_ERR_INVALID_ARG;
+    if ((clk < SI5351_MS_CLK0) || (clk >= SI5351_MS_CLK_COUNT)) goto finish;
+    if ((r & ~(SI5351_MULTISYNTH0_PARAMETERS_R_DIVIDER_bm)) != 0) goto finish;
+    if ((drv_strength & ~(SI5351_CLK_CONTROL_CLK_IDRV_bm)) != 0) goto finish;
+    if (si5351_is_clk_source_valid(clk, &clk_source)) {
+        uint8_t data;
+        result = si5351_i2c_read(chip.i2c_address, si5351_clk_register[clk], &data, 1);
+        if (result == SI5351_OK) {
+            data &= ~(SI5351_CLK_CONTROL_CLK_SRC_bm);
+            data |= clk_source & SI5351_CLK_CONTROL_CLK_SRC_bm;
+            data &= ~(SI5351_CLK_CONTROL_CLK_IDRV_bm);
+            data |= drv_strength & SI5351_CLK_CONTROL_CLK_IDRV_bm;
+            data &= ~(SI5351_CLK_CONTROL_CLK_INV_bm);
+            if (inverted) data |= SI5351_CLK_CONTROL_CLK_INV_bm;
+            data &= ~(SI5351_CLK_CONTROL_CLK_PDN_bm);
+            if (!powerup) data |= SI5351_CLK_CONTROL_CLK_PDN_bm;
+            result = si5351_i2c_write(chip.i2c_address, si5351_clk_register[clk], &data, 1);
+            if (result == SI5351_OK) {
+                result = si5351_set_clk_r_div(clk, r);
+            }
+        }
     }
 finish:
     return result;
@@ -675,18 +659,124 @@ finish:
 
 si5351_err_t si5351_set_clk_initial_phase(si5351_ms_clk_reg_t clk, uint8_t phase)
 {
-    si5351_err_t result = SI5351_OK;
-    if ((clk < 0) || (clk > SI5351_MS_CLK5)) result = SI5351_ERR_INVALID_ARG;
-    if (phase > SI5351_CLK_INITIAL_PHASE_OFFSET_bm) phase = SI5351_CLK_INITIAL_PHASE_OFFSET_bm;
-    result = si5351_i2c_write(chip.i2c_address, SI5351_CLK0_INITIAL_PHASE_OFFSET + (uint8_t)clk, &phase, 1);
+    si5351_err_t result = SI5351_ERR_INVALID_ARG;
+    if ((clk >= SI5351_MS_CLK0) && (clk <= SI5351_MS_CLK5)) {
+        if (phase > SI5351_CLK_INITIAL_PHASE_OFFSET_bm) phase = SI5351_CLK_INITIAL_PHASE_OFFSET_bm;
+        result = si5351_i2c_write(chip.i2c_address, SI5351_CLK0_INITIAL_PHASE_OFFSET + (uint8_t)clk, &phase, 1);
+    }
+    return result;
+}
+
+si5351_err_t si5351_set_clk_inverted(si5351_ms_clk_reg_t clk, bool inverted)
+{
+    si5351_err_t result = SI5351_ERR_INVALID_ARG;
+    if ((clk >= SI5351_MS_CLK0) && (clk < SI5351_MS_CLK_COUNT)) {
+        uint8_t data;
+        result = si5351_i2c_read(chip.i2c_address, si5351_clk_register[clk], &data, 1);
+        if (result == SI5351_OK) {
+            if (inverted) {
+                data |= SI5351_CLK_CONTROL_CLK_INV_bm;
+            } else {
+                data &= ~(SI5351_CLK_CONTROL_CLK_INV_bm);
+            }
+            result = si5351_i2c_write(chip.i2c_address, si5351_clk_register[clk], &data, 1);
+        }
+    }
+    return result;
+}
+
+si5351_err_t si5351_set_clk_r_div(si5351_ms_clk_reg_t clk, si5351_clk_r_div_t r)
+{
+    si5351_err_t result = SI5351_ERR_INVALID_ARG;
+    if ((clk >= SI5351_MS_CLK0) && (clk < SI5351_MS_CLK_COUNT) && ((r & ~(SI5351_MULTISYNTH0_PARAMETERS_R_DIVIDER_bm)) == 0)) {
+        uint8_t data;
+        uint8_t reg = si5351_multisynth_register[clk] + 2;
+        result = si5351_i2c_read(chip.i2c_address, reg, &data, 1);
+        if (result == SI5351_OK) {
+            data &= ~(SI5351_MULTISYNTH0_PARAMETERS_R_DIVIDER_bm);
+            data |= r;
+            result = si5351_i2c_write(chip.i2c_address, reg, &data, 1);
+        }
+    }
+    return result;
+}
+
+si5351_err_t si5351_set_clk_strength(si5351_ms_clk_reg_t clk, si5351_drv_strength_t drv_strength)
+{
+    si5351_err_t result = SI5351_ERR_INVALID_ARG;
+    if ((clk >= SI5351_MS_CLK0) && (clk < SI5351_MS_CLK_COUNT) && ((drv_strength & ~(SI5351_CLK_CONTROL_CLK_IDRV_bm)) == 0x00)) {
+        uint8_t data;
+        result = si5351_i2c_read(chip.i2c_address, si5351_clk_register[clk], &data, 1);
+        if (result == SI5351_OK) {
+            data &= ~(SI5351_CLK_CONTROL_CLK_IDRV_bm);
+            data |= drv_strength & SI5351_CLK_CONTROL_CLK_IDRV_bm;
+            result = si5351_i2c_write(chip.i2c_address, si5351_clk_register[clk], &data, 1);
+        }
+    }
+    return result;
+}
+
+bool si5351_is_clk_source_valid(si5351_ms_clk_reg_t clk, si5351_clk_source_t* clk_source)
+{
+    bool result = false;
+    if ((clk >= SI5351_MS_CLK0) && (clk < SI5351_MS_CLK_COUNT)) {
+        switch (clk) {
+            case SI5351_MS_CLK0:
+                if (*clk_source == SI5351_CLK_SOURCE_MS_0_OR_4) *clk_source = SI5351_CLK_SOURCE_MS_X;
+                break;
+            case SI5351_MS_CLK1:
+            case SI5351_MS_CLK2:
+            case SI5351_MS_CLK3:
+                if (chip.fanout_bm & SI5351_FANOUT_ENABLE_MS_bm) {
+                    if ((*clk_source == SI5351_CLK_SOURCE_MS_0_OR_4) && chip.ms[SI5351_MS_CLK0].configured) result = true;
+                }
+                break;
+            case SI5351_MS_CLK4:
+                if (*clk_source == SI5351_CLK_SOURCE_MS_0_OR_4) *clk_source = SI5351_CLK_SOURCE_MS_X;
+                break;
+            case SI5351_MS_CLK5:
+            case SI5351_MS_CLK6:
+            case SI5351_MS_CLK7:
+                if (chip.fanout_bm & SI5351_FANOUT_ENABLE_MS_bm) {
+                    if ((*clk_source == SI5351_CLK_SOURCE_MS_0_OR_4) && chip.ms[SI5351_MS_CLK4].configured) result = true;
+                }
+                break;
+            default:
+                result = false;
+        }
+        if ((*clk_source == SI5351_CLK_SOURCE_MS_X) && chip.ms[clk].configured) result = true;
+        if (*clk_source == SI5351_CLK_SOURCE_XTAL) {
+            if ((chip.fanout_bm & SI5351_FANOUT_ENABLE_XO_bm) && (chip.crystal_freq > 0)) result = true;
+        }
+        if (*clk_source == SI5351_CLK_SOURCE_CLKIN) {
+            if ((chip.fanout_bm & SI5351_FANOUT_ENABLE_CLKIN_bm) && (chip.clkin_freq > 0)) result = true;
+        }
+    }
+    return result;
+}
+
+si5351_err_t si5351_set_clk_source(si5351_ms_clk_reg_t clk, si5351_clk_source_t clk_source)
+{
+    si5351_err_t result = SI5351_ERR_INVALID_ARG;
+    if ((clk >= SI5351_MS_CLK0) && (clk < SI5351_MS_CLK_COUNT)) {
+        if (si5351_is_clk_source_valid(clk, &clk_source)) {
+            uint8_t data;
+            result = si5351_i2c_read(chip.i2c_address, si5351_clk_register[clk], &data, 1);
+            if (result == SI5351_OK) {
+                data &= ~(SI5351_CLK_CONTROL_CLK_SRC_bm);
+                data |= (clk_source & SI5351_CLK_CONTROL_CLK_SRC_bm);
+                result = si5351_i2c_write(chip.i2c_address, si5351_clk_register[clk], &data, 1);
+            }
+        }
+    }
     return result;
 }
 
 si5351_err_t si5351_set_clk_power_enable(si5351_ms_clk_reg_t clk, bool enable)
 {
-    si5351_err_t result;
-    uint8_t data;
-    if ((clk >= 0) && (clk < SI5351_MS_CLK_COUNT)) {
+    si5351_err_t result = SI5351_ERR_INVALID_ARG;
+    if ((clk >= SI5351_MS_CLK0) && (clk < SI5351_MS_CLK_COUNT)) {
+        uint8_t data;
         result = si5351_i2c_read(chip.i2c_address, si5351_clk_register[clk], &data, 1);
         if (result == SI5351_OK) {
             if (enable) {
@@ -696,25 +786,15 @@ si5351_err_t si5351_set_clk_power_enable(si5351_ms_clk_reg_t clk, bool enable)
             }
             result = si5351_i2c_write(chip.i2c_address, si5351_clk_register[clk], &data, 1);
         }
-    } else {
-        result = SI5351_ERR_INVALID_ARG;
     }
-    return result;
-}
-
-si5351_err_t si5351_reset_pll()
-{
-    si5351_err_t result;
-    uint8_t data = SI5351_PLL_RESET_PLLA_RST_bm | SI5351_PLL_RESET_PLLB_RST_bm;
-    result = si5351_i2c_write(chip.i2c_address, SI5351_PLL_RESET, &data, 1);
     return result;
 }
 
 si5351_err_t si5351_set_output_enable(si5351_ms_clk_reg_t clk, bool enable)
 {
-    si5351_err_t result;
-    uint8_t data;
-    if ((clk >= 0) && (clk < SI5351_MS_CLK_COUNT)) {
+    si5351_err_t result = SI5351_ERR_INVALID_ARG;
+    if ((clk >= SI5351_MS_CLK0) && (clk < SI5351_MS_CLK_COUNT)) {
+        uint8_t data;
         result = si5351_i2c_read(chip.i2c_address, SI5351_OUTPUT_ENABLE_CONTROL, &data, 1);
         if (result == SI5351_OK) {
             if (enable) {
@@ -724,16 +804,14 @@ si5351_err_t si5351_set_output_enable(si5351_ms_clk_reg_t clk, bool enable)
             }
             result = si5351_i2c_write(chip.i2c_address, SI5351_OUTPUT_ENABLE_CONTROL, &data, 1);
         }
-    } else {
-        result = SI5351_ERR_INVALID_ARG;
     }
     return result;
 }
 
 si5351_err_t si5351_set_powerdown()
 {
-    si5351_err_t result = SI5351_OK;
-    for (int i = 0; i < SI5351_MS_CLK_COUNT; i++) {
+    si5351_err_t result = SI5351_ERR_INVALID_STATE;
+    for (int i = SI5351_MS_CLK0; i < SI5351_MS_CLK_COUNT; i++) {
         result = si5351_set_output_enable(i, false);
         if (result != SI5351_OK) break;
         result = si5351_set_clk_power_enable(i, false);
@@ -758,7 +836,7 @@ si5351_err_t si5351_write_reg(uint8_t reg, uint8_t data)
 
 si5351_err_t si5351_get_revision_id(si5351_variant_t variant, si5351_revision_t* rev_id)
 {
-    si5351_err_t result = SI5351_OK;
+    si5351_err_t result = SI5351_ERR_INVALID_ARG;
     switch (variant) {
         case SI5351_VARIANT_A_A_GM:
         case SI5351_VARIANT_A_A_GU:
@@ -768,6 +846,7 @@ si5351_err_t si5351_get_revision_id(si5351_variant_t variant, si5351_revision_t*
         case SI5351_VARIANT_C_A_GM:
         case SI5351_VARIANT_C_A_GU:
             *rev_id = SI5351_REVISION_A;
+            result = SI5351_OK;
             break;
         case SI5351_VARIANT_A_B_GM:
         case SI5351_VARIANT_A_B_GM1:
@@ -777,10 +856,10 @@ si5351_err_t si5351_get_revision_id(si5351_variant_t variant, si5351_revision_t*
         case SI5351_VARIANT_C_B_GM:
         case SI5351_VARIANT_C_B_GM1:
             *rev_id = SI5351_REVISION_B;
+            result = SI5351_OK;
             break;
         default:
             *rev_id = SI5351_REVISION_A;
-            result = SI5351_ERR_INVALID_ARG;
     }
     return result;
 }

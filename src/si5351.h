@@ -130,6 +130,7 @@ typedef struct {
     uint8_t clkin_divider;
     si5351_pll_t pll[SI5351_PLL_COUNT];
     si5351_ms_t ms[SI5351_MS_CLK_COUNT];
+    uint8_t fanout_bm;
 } si5351_t;
 
 
@@ -210,6 +211,7 @@ si5351_err_t si5351_set_pll_vco_integer(si5351_pll_reg_t pll, uint8_t a);
 si5351_err_t si5351_set_pll_vco_fractional(si5351_pll_reg_t pll, uint8_t a, uint32_t b, uint32_t c);
 si5351_err_t si5351_set_pll_mode_integer(si5351_pll_reg_t pll, bool integer);
 si5351_err_t si5351_get_pll_frequency(si5351_pll_reg_t pll, uint32_t* frequency);
+si5351_err_t si5351_reset_pll();
 si5351_err_t si5351_set_multisynth(si5351_ms_clk_reg_t ms, si5351_pll_reg_t pll_source, uint32_t frequency);
 si5351_err_t si5351_set_multisynth_integer(si5351_ms_clk_reg_t ms, si5351_pll_reg_t pll_source, uint16_t a);
 si5351_err_t si5351_set_multisynth_fractional(si5351_ms_clk_reg_t ms, si5351_pll_reg_t pll_source, uint16_t a, uint32_t b, uint32_t c);
@@ -224,8 +226,11 @@ si5351_err_t si5351_set_clk(si5351_ms_clk_reg_t clk,
                             si5351_clk_r_div_t r,
                             si5351_drv_strength_t drv_strength);
 si5351_err_t si5351_set_clk_initial_phase(si5351_ms_clk_reg_t clk, uint8_t phase);
+si5351_err_t si5351_set_clk_inverted(si5351_ms_clk_reg_t clk, bool inverted);
+si5351_err_t si5351_set_clk_r_div(si5351_ms_clk_reg_t clk, si5351_clk_r_div_t r);
+si5351_err_t si5351_set_clk_strength(si5351_ms_clk_reg_t clk, si5351_drv_strength_t drv_strength);
+si5351_err_t si5351_set_clk_source(si5351_ms_clk_reg_t clk, si5351_clk_source_t clk_source);
 si5351_err_t si5351_set_clk_power_enable(si5351_ms_clk_reg_t clk, bool enable);
-si5351_err_t si5351_reset_pll();
 si5351_err_t si5351_set_output_enable(si5351_ms_clk_reg_t clk, bool enable);
 si5351_err_t si5351_set_powerdown();
 

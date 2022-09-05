@@ -5,3 +5,7 @@ The examples should work with other ESPs as well, but this may require changes t
 Don't forget to copy the current Si5351 library to the example folder.
 
 ![test circuit](../images/test_circuit.jpg)
+
+### Frequency plan.
+
+![frequency plan](../images/frequency_plan.png)
